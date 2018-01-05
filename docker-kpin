@@ -1,0 +1,27 @@
+#!/bin/bash
+
+KPIN_VERSION=latest
+
+if ! docker image inspect "kronostechnologies/kpin:${KPIN_VERSION}" &> /dev/null; then
+  docker pull "kronostechnologies/kpin:${KPIN_VERSION}"
+fi
+
+declare -a FLAGS=( --rm --read-only )
+
+if [[ -f "${HOME}/.config/kpin.yaml" ]]; then
+  FLAGS+=( -v "${HOME}/.config/kpin.yaml":/root/.config/kpin.yaml )
+fi
+
+if [[ -d "${HOME}/.aws" ]]; then
+  FLAGS+=( -v "${HOME}/.aws":/root/.aws )
+fi
+
+if [[ -t 1 ]]; then
+  FLAGS+=( --tty )
+fi
+
+if [[ -n "${AWS_PROFILE}" ]]; then
+  FLAGS+=( -e AWS_PROFILE="${AWS_PROFILE}" )
+fi
+
+docker run "${FLAGS[@]}" "kronostechnologies/kpin:${KPIN_VERSION}" "$@"
