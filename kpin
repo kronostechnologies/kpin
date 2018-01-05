@@ -269,7 +269,6 @@ def main():
             if aws_profile:
                 boto3.setup_default_session(profile_name=aws_profile)
             project_matching_rule = config.get('project_matching_rule', None)
-            project_matching_rule = '(?P<project>[a-z]).*'
             if project_matching_rule:
                 registry_config['project_matching_rule'] = re.compile(project_matching_rule)
 
