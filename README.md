@@ -35,7 +35,7 @@ Config file example (~/.aws/config):
 ```
 [profile ecr]
 region = us-east-1
-role_arn = arn:aws:iam::123456789012:role/ecr
+role_arn = arn:aws:iam::123456789012:role/ecr-admin
 source_profile = default
 ``` 
 
