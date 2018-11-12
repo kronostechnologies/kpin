@@ -71,6 +71,7 @@ class Repository:
     def get_images(self) -> List[Image]:
         if self.__images is None:
             response = self.__client.describe_images(repositoryName=self.name, filter={'tagStatus': 'TAGGED'})
+
             self.__images = [Image(self.__client, i) for i in response['imageDetails']]
 
         return self.__images
@@ -187,15 +188,36 @@ class Commands:
         self.registry = registry
         self.output = output
 
-    def list_versions(self, repository_names: List[str] = None):
+    def list_versions(self, repository_names: List[str] = None, latest = False):
         repository_groups = self.registry.get_repository_groups(repository_names)
 
         comparator = functools.cmp_to_key(semver.compare)
+        
 
         for name, repository_group in sorted(repository_groups.items(), key=lambda k: k[0]):
             images_by_version = repository_group.main_repository.get_images_by_property('versions')
+            itemsToPrint = dict()
+            if latest:
+               if images_by_version.items():
 
-            self.output.print_list(name, images_by_version.items(), 'pins', comparator)
+                  sortedItems = sorted(images_by_version.items(),key=lambda k: k[0], reverse=True)
+                  oneClosed=False
+                  oneOppened=False
+                  for key, image in sortedItems:
+
+                    patternOpened = re.compile(".+-[0-9]+$")
+                    patternClosed = re.compile(".+\.[0-9]+$")
+                    if patternClosed.match(key) and not oneClosed:
+                         itemsToPrint[key] = image
+                         oneClosed = True
+                    else:
+                      if patternOpened.match(key) and not oneOppened:
+                            itemsToPrint[key] = image
+                            oneOppened = True
+            else :
+                itemsToPrint = images_by_version.items()
+            
+            self.output.print_list(name, itemsToPrint.items(), 'pins', comparator)
 
     def show_pins(self, environment_names: List[str] = None):
         repository_groups = self.registry.get_repository_groups()
@@ -289,8 +311,9 @@ def main():
     list_parser.add_argument('ENVIRONMENT', nargs='*', help='Environment to list pins from')
 
     versions_parser = subparsers.add_parser('list-versions', help='List available versions')
-    versions_parser.set_defaults(func=lambda p: commands.list_versions(p.PROJECT or None))
+    versions_parser.set_defaults(func=lambda p: commands.list_versions(p.PROJECT or None, p.latest))
     versions_parser.add_argument('PROJECT', nargs='*')
+    versions_parser.add_argument('--latest', action='store_true', help='Show only the latest open and closed version')
 
     # autohelp
     if not sys.argv[1:]:
