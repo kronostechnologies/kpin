@@ -6,7 +6,7 @@ import re
 import sys
 import yaml
 import pathlib
-from typing import Dict, List, Tuple, Callable, ItemsView, Pattern
+from typing import Dict, List, Tuple, Callable, ItemsView
 
 from termcolor import cprint
 
@@ -142,7 +142,7 @@ class Registry:
 
 class Output:
     @staticmethod
-    def print_list(name: str, items: ItemsView[str, Image], property: str, comparator: Callable = None):
+    def print_list(name: str, items: ItemsView[str, Image], property_name: str, comparator: Callable = None):
         buffer = []
 
         args = {}
@@ -150,8 +150,8 @@ class Output:
             args['key'] = lambda t: comparator(t[0])
 
         for key, image in sorted(items, **args):
-            if getattr(image, property):
-                buffer.append('{} ({})'.format(key, ' '.join(getattr(image, property))))
+            if getattr(image, property_name):
+                buffer.append('{} ({})'.format(key, ' '.join(getattr(image, property_name))))
             else:
                 buffer.append(key)
 
@@ -188,36 +188,34 @@ class Commands:
         self.registry = registry
         self.output = output
 
-    def list_versions(self, repository_names: List[str] = None, latest = False):
+    def list_versions(self, repository_names: List[str] = None, latest: bool = False):
         repository_groups = self.registry.get_repository_groups(repository_names)
 
         comparator = functools.cmp_to_key(semver.compare)
-        
 
         for name, repository_group in sorted(repository_groups.items(), key=lambda k: k[0]):
             images_by_version = repository_group.main_repository.get_images_by_property('versions')
-            itemsToPrint = dict()
+            items_to_print = dict()
+
             if latest:
-               if images_by_version.items():
+                if images_by_version:
+                    sorted_items = sorted(images_by_version.items(), key=lambda k: comparator(k[0]), reverse=True)
+                    pattern_closed = re.compile(".+\.[0-9]+$")
+                    pattern_opened = re.compile(".+-[0-9]+$")
 
-                  sortedItems = sorted(images_by_version.items(),key=lambda k: k[0], reverse=True)
-                  oneClosed=False
-                  oneOppened=False
-                  for key, image in sortedItems:
+                    for key, image in sorted_items:
+                        if pattern_closed.match(key):
+                            items_to_print[key] = image
+                            break
 
-                    patternOpened = re.compile(".+-[0-9]+$")
-                    patternClosed = re.compile(".+\.[0-9]+$")
-                    if patternClosed.match(key) and not oneClosed:
-                         itemsToPrint[key] = image
-                         oneClosed = True
-                    else:
-                      if patternOpened.match(key) and not oneOppened:
-                            itemsToPrint[key] = image
-                            oneOppened = True
-            else :
-                itemsToPrint = images_by_version.items()
-            
-            self.output.print_list(name, itemsToPrint.items(), 'pins', comparator)
+                    for key, image in sorted_items:
+                        if pattern_opened.match(key):
+                            items_to_print[key] = image
+                            break
+            else:
+                items_to_print = images_by_version
+
+            self.output.print_list(name, items_to_print.items(), 'pins', comparator)
 
     def show_pins(self, environment_names: List[str] = None):
         repository_groups = self.registry.get_repository_groups()
@@ -280,12 +278,12 @@ def project_version(arg: str) -> ProjectVersionArg:
 def main():
     output = Output()
 
-    configpath = pathlib.PosixPath('~/.config/kpin.yaml').expanduser()
+    config_path = pathlib.PosixPath('~/.config/kpin.yaml').expanduser()
 
     registry_config = {}
 
-    if configpath.exists():
-        with open(configpath, 'r') as stream:
+    if config_path.exists():
+        with open(str(config_path), 'r') as stream:
             config = yaml.load(stream)
             aws_profile = config.get('aws_profile', None)
             if aws_profile:
@@ -301,21 +299,21 @@ def main():
 
     subparsers = parser.add_subparsers(title='Commands', metavar=None)
 
-    set_parser = subparsers.add_parser('set', help='Set pins')
+    set_parser = subparsers.add_parser('set', help='set pins')
     set_parser.set_defaults(func=lambda e: commands.set_pins(e.ENVIRONMENT, e.PROJECT))
-    set_parser.add_argument('ENVIRONMENT', help='Environment pin to add')
-    set_parser.add_argument('PROJECT', nargs='+', type=project_version, help='Project to pin: project@semver')
+    set_parser.add_argument('ENVIRONMENT', help='environment pin to add')
+    set_parser.add_argument('PROJECT', nargs='+', type=project_version, help='project to pin: project@semver')
 
-    list_parser = subparsers.add_parser('show', help='Show pins')
+    list_parser = subparsers.add_parser('show', help='show pins')
     list_parser.set_defaults(func=lambda e: commands.show_pins(e.ENVIRONMENT))
     list_parser.add_argument('ENVIRONMENT', nargs='*', help='Environment to list pins from')
 
-    versions_parser = subparsers.add_parser('list-versions', help='List available versions')
+    versions_parser = subparsers.add_parser('versions', help='list available versions', aliases=['list-versions'])
     versions_parser.set_defaults(func=lambda p: commands.list_versions(p.PROJECT or None, p.latest))
     versions_parser.add_argument('PROJECT', nargs='*')
-    versions_parser.add_argument('--latest', action='store_true', help='Show only the latest open and closed version')
+    versions_parser.add_argument('-l', '--latest', action='store_true', help='show only the latest open and closed versions')
 
-    # autohelp
+    # show help without arguments
     if not sys.argv[1:]:
         sys.argv.insert(1, '-h')
 
