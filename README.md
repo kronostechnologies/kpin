@@ -68,16 +68,17 @@ project_matching_rule: '(?P<project>[a-z_\-]+?)(-backend)?'
 
 ```
 $ kpin -h
-usage: kpin [-h] {set,show,list-versions} ...
+usage: kpin [-h] {set,show,versions,list-versions} ...
 
 optional arguments:
   -h, --help            show this help message and exit
 
 Commands:
-  {set,show,list-versions}
-    set                 Set pins
-    show                Show pins
-    list-versions       List available versions
+  {set,show,versions,list-versions}
+    set                 set pins
+    show                show pins
+    versions (list-versions)
+                        list available versions
 ```
 
 
@@ -87,8 +88,8 @@ $ kpin set -h
 usage: kpin set [-h] ENVIRONMENT PROJECT [PROJECT ...]
 
 positional arguments:
-  ENVIRONMENT  Environment pin to add
-  PROJECT      Project to pin: project@semver
+  ENVIRONMENT  environment pin to add
+  PROJECT      project to pin: project@semver
 
 optional arguments:
   -h, --help   show this help message and exit
@@ -105,7 +106,7 @@ $ kpin show -h
 usage: kpin show [-h] [ENVIRONMENT [ENVIRONMENT ...]]
 
 positional arguments:
-  ENVIRONMENT  Environment to list pins from
+  ENVIRONMENT  environment to list pins from
 
 optional arguments:
   -h, --help   show this help message and exit
@@ -122,22 +123,28 @@ my-prod:
 
 ### Show versions for one or many projects
 ```
-$ kpin list-versions -h
-usage: kpin list-versions [-h] [PROJECT [PROJECT ...]]
+$ kpin versions -h
+usage: kpin versions [-h] [-l] [PROJECT [PROJECT ...]]
 
 positional arguments:
   PROJECT
 
 optional arguments:
-  -h, --help  show this help message and exit
+  -h, --help    show this help message and exit
+  -l, --latest  show only the latest open and closed versions
 ```
 
 Example:
 ```
-$ kpin list-versions a-project
+$ kpin versions a-project
 a-project:
   1.0.0 (my-prod)
+  1.0.1-0
   1.0.1
   1.0.2
+  
+$ kpin versions -l a-project
+a-project:
+  1.0.1-0
+  1.0.2
 ```
-
