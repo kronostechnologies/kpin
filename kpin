@@ -15,6 +15,19 @@ import semver
 
 ProjectVersionArg = Tuple[str, str]
 
+_VERSION_REGEX = re.compile(
+        r"""
+        ^
+        (?P<major>(?:0|[1-9][0-9]*))
+        \.
+        (?P<minor>(?:0|[1-9][0-9]*))
+        \.
+        (?P<patch>(?:0|[1-9][0-9]*|\*))
+        (\-(?P<prerelease>
+            (?:0|[1-9][0-9]*)
+        ))?
+        $
+        """, re.VERBOSE)
 
 class Image:
     __pin_prefix = 'pin-'
@@ -241,17 +254,37 @@ class Commands:
                 versions = repository.get_images_by_property('versions')
                 pins = repository.get_images_by_property('pins')
 
+                match = _VERSION_REGEX.match(version)
+                if match is None:
+                    raise ValueError('%s is not valid version string' % version)
+
+                version_parts = match.groupdict()
+                print(version_parts);
                 try:
-                    new_image = versions[version]
+                    if(version_parts['patch'] == '*' and version_parts['prerelease'] is None):
+                        matched_versions = []
+                        for image_version, image in versions.items():
+                            if semver.match(image_version, '>'+str(version_parts['major'])+'.'+str(version_parts['minor'])+'.0'):
+                                if semver.match(image_version, '<'+str(version_parts['major'])+'.'+str((int(version_parts['minor'])+1))+'.0'):
+                                    matched_versions.append(image_version)
+
+                        version_to_pin = '0.0.0'
+                        for matched_version in matched_versions:
+                            version_to_pin = semver.max_ver(version_to_pin,matched_version)
+                    else:
+                        version_to_pin = version
+
+                    new_image = versions[version_to_pin]
                     new_image.add_pin(environment)
-                    self.output.print_success('{}@{} set for {}!'.format(repository.name, version, environment))
+                    self.output.print_success('{}@{} set for {}!'.format(repository.name, version_to_pin, environment))
                 except KeyError:
                     self.output.print_error("{}@{} skipped: version not found."
-                                            .format(repository.name, version))
+                                            .format(repository.name, version_to_pin))
                     continue
-                except ValueError:
+                except ValueError as e:
+                    print(e)
                     self.output.print_error("{}@{} skipped: already set for {}."
-                                            .format(repository.name, version, environment))
+                                            .format(repository.name, version_to_pin, environment))
                     continue
 
                 try:
@@ -271,7 +304,7 @@ def project_version(arg: str) -> ProjectVersionArg:
     project, version = arg.split('@')
     if not re.compile('^[A-Za-z0-9_.\-]+$').fullmatch(project):
         raise ValueError("{} is not a valid project name".format(project))
-    semver.parse(version)
+
     return project, version
 
 
@@ -302,7 +335,7 @@ def main():
     set_parser = subparsers.add_parser('set', help='set pins')
     set_parser.set_defaults(func=lambda e: commands.set_pins(e.ENVIRONMENT, e.PROJECT))
     set_parser.add_argument('ENVIRONMENT', help='environment pin to add')
-    set_parser.add_argument('PROJECT', nargs='+', type=project_version, help='project to pin: project@semver')
+    set_parser.add_argument('PROJECT', nargs='+', type=project_version, help='project to pin: project@x.x.x-x (You can use * as patch to get the latest patch. Can\'t be used with a pre release)')
 
     list_parser = subparsers.add_parser('show', help='show pins')
     list_parser.set_defaults(func=lambda e: commands.show_pins(e.ENVIRONMENT))
@@ -311,7 +344,8 @@ def main():
     versions_parser = subparsers.add_parser('versions', help='list available versions', aliases=['list-versions'])
     versions_parser.set_defaults(func=lambda p: commands.list_versions(p.PROJECT or None, p.latest))
     versions_parser.add_argument('PROJECT', nargs='*')
-    versions_parser.add_argument('-l', '--latest', action='store_true', help='show only the latest open and closed versions')
+    versions_parser.add_argument('-l', '--latest', action='store_true',
+                                 help='show only the latest open and closed versions')
 
     # show help without arguments
     if not sys.argv[1:]:

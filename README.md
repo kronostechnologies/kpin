@@ -89,7 +89,8 @@ usage: kpin set [-h] ENVIRONMENT PROJECT [PROJECT ...]
 
 positional arguments:
   ENVIRONMENT  environment pin to add
-  PROJECT      project to pin: project@semver
+  PROJECT      project to pin: project@x.x.x-x
+               You can use * as patch to get the latest patch. Can't be used with a pre release
 
 optional arguments:
   -h, --help   show this help message and exit
@@ -97,7 +98,7 @@ optional arguments:
 
 Example:
 ```
-$ kpin set my-prod a-project@1.0.0 another-project@2.0.3
+$ kpin set my-prod a-project@1.0.0 another-project@2.0.3 another-other-project@2.1.*
 ```
 
 ### Show pins for one or many environments
