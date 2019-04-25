@@ -9,14 +9,14 @@ Linux:
 ```
 git clone git@github.com:kronostechnologies/kpin
 sudo apt-get install python3-pip python3
-pip3 install -r requirements
+pip3 install -r requirements.txt
 ```
 
 Mac:
 ```
 git clone git@github.com:kronostechnologies/kpin
-brew install python3
-pip3 install -r requirements
+brew install python
+pip3 install -r requirements.txt
 ```
 
 Docker:
