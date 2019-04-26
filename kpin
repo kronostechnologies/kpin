@@ -259,7 +259,6 @@ class Commands:
                     raise ValueError('%s is not valid version string' % version)
 
                 version_parts = match.groupdict()
-                print(version_parts);
                 try:
                     if(version_parts['patch'] == '*' and version_parts['prerelease'] is None):
                         matched_versions = []
