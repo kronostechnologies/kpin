@@ -155,7 +155,7 @@ class Registry:
 
 class Output:
     @staticmethod
-    def print_list(name: str, items: ItemsView[str, Image], property_name: str, comparator: Callable = None):
+    def print_list(name: str, items: ItemsView[str, Image], formatter: Callable, comparator: Callable = None):
         buffer = []
 
         args = {}
@@ -163,10 +163,7 @@ class Output:
             args['key'] = lambda t: comparator(t[0])
 
         for key, image in sorted(items, **args):
-            if getattr(image, property_name):
-                buffer.append('{} ({})'.format(key, ' '.join(getattr(image, property_name))))
-            else:
-                buffer.append(key)
+            buffer.append(formatter(key, image))
 
         if buffer:
             if sys.stdout.isatty():
@@ -201,10 +198,22 @@ class Commands:
         self.registry = registry
         self.output = output
 
-    def list_versions(self, repository_names: List[str] = None, latest: bool = False):
+    def list_versions(self, repository_names: List[str] = None, latest: bool = False, old: bool = False):
         repository_groups = self.registry.get_repository_groups(repository_names)
 
         comparator = functools.cmp_to_key(semver.compare)
+
+        def formatter(k, img):
+            pins = []
+
+            for pin in getattr(img, 'pins'):
+                if old or not pin.endswith('-old'):
+                    pins.append(pin)
+
+            if pins:
+                return '{} ({})'.format(k, ' '.join(sorted(pins)))
+            else:
+                return k
 
         for name, repository_group in sorted(repository_groups.items(), key=lambda k: k[0]):
             images_by_version = repository_group.main_repository.get_images_by_property('versions')
@@ -213,7 +222,7 @@ class Commands:
             if latest:
                 if images_by_version:
                     sorted_items = sorted(images_by_version.items(), key=lambda k: comparator(k[0]), reverse=True)
-                    pattern_closed = re.compile(".+\.[0-9]+$")
+                    pattern_closed = re.compile(".+\\.[0-9]+$")
                     pattern_opened = re.compile(".+-[0-9]+$")
 
                     for key, image in sorted_items:
@@ -228,9 +237,9 @@ class Commands:
             else:
                 items_to_print = images_by_version
 
-            self.output.print_list(name, items_to_print.items(), 'pins', comparator)
+            self.output.print_list(name, items_to_print.items(), formatter, comparator)
 
-    def show_pins(self, environment_names: List[str] = None):
+    def show_pins(self, environment_names: List[str] = None, old: bool = False):
         repository_groups = self.registry.get_repository_groups()
 
         environments = dict()
@@ -238,13 +247,16 @@ class Commands:
             images_by_pin = repository_group.main_repository.get_images_by_property('pins')
 
             for pin, image in images_by_pin.items():
-                if not environment_names or pin in environment_names:
+                if (not environment_names and (old or not pin.endswith('-old'))) or pin in environment_names:
                     environments.setdefault(pin, dict())[image.name] = image
 
-        for environment, images in sorted(environments.items(), key=lambda k: k[0]):
-            self.output.print_list(environment, images.items(), 'versions')
+        def formatter(k, img):
+            return '{} ({})'.format(k, ' '.join(getattr(img, 'versions')))
 
-    def set_pins(self, environment: str, projects: List[ProjectVersionArg]):
+        for environment, images in sorted(environments.items(), key=lambda k: k[0]):
+            self.output.print_list(environment, images.items(), formatter)
+
+    def set_pins(self, environment: str, projects: List[ProjectVersionArg], create: bool = False):
         repository_groups = self.registry.get_repository_groups()
 
         for project, version in projects:
@@ -254,25 +266,40 @@ class Commands:
                 versions = repository.get_images_by_property('versions')
                 pins = repository.get_images_by_property('pins')
 
-                match = _VERSION_REGEX.match(version)
-                if match is None:
-                    raise ValueError('%s is not valid version string' % version)
-
-                version_parts = match.groupdict()
                 try:
-                    if(version_parts['patch'] == '*' and version_parts['prerelease'] is None):
-                        matched_versions = []
-                        for image_version, image in versions.items():
-                            if semver.match(image_version, '>'+str(version_parts['major'])+'.'+str(version_parts['minor'])+'.0'):
-                                if semver.match(image_version, '<'+str(version_parts['major'])+'.'+str((int(version_parts['minor'])+1))+'.0'):
-                                    matched_versions.append(image_version)
+                    match = _VERSION_REGEX.match(version)
+                    if match is None:
+                        raise ValueError('%s is not valid version' % version)
 
-                        version_to_pin = '0.0.0'
-                        for matched_version in matched_versions:
-                            version_to_pin = semver.max_ver(version_to_pin,matched_version)
-                    else:
-                        version_to_pin = version
+                    version_parts = match.groupdict()
+                except ValueError as e:
+                    self.output.print_error('{} skipped: {}'.format(repository.name, e))
+                    continue
 
+                if version_parts['patch'] == '*' and version_parts['prerelease'] is None:
+                    matched_versions = []
+                    for image_version, image in versions.items():
+                        if semver.match(image_version,
+                                        '>' + str(version_parts['major']) + '.' + str(version_parts['minor']) + '.0'):
+                            if semver.match(image_version, '<' + str(version_parts['major']) + '.' + str(
+                                    (int(version_parts['minor']) + 1)) + '.0'):
+                                matched_versions.append(image_version)
+
+                    version_to_pin = None
+                    for matched_version in matched_versions:
+                        version_to_pin = semver.max_ver(version_to_pin, matched_version)
+                else:
+                    version_to_pin = version
+
+                try:
+                    current_version = pins.get(environment)
+                    if current_version is None and not create:
+                        raise ValueError('{} skipped: {} is not a valid environment. Use --create-environment option to override.'.format(repository.name, environment))
+                except ValueError as e:
+                    self.output.print_error(e)
+                    continue
+
+                try:
                     new_image = versions[version_to_pin]
                     new_image.add_pin(environment)
                     self.output.print_success('{}@{} set for {}!'.format(repository.name, version_to_pin, environment))
@@ -331,20 +358,26 @@ def main():
 
     subparsers = parser.add_subparsers(title='Commands', metavar=None)
 
-    set_parser = subparsers.add_parser('set', help='set pins')
-    set_parser.set_defaults(func=lambda e: commands.set_pins(e.ENVIRONMENT, e.PROJECT))
+    set_parser = subparsers.add_parser('set', help='set pins', aliases=['s'])
+    set_parser.set_defaults(func=lambda e: commands.set_pins(e.ENVIRONMENT, e.PROJECT, e.create_environment))
+    set_parser.add_argument('--create-environment', action='store_true',
+                                 help='allows creation of an environment')
     set_parser.add_argument('ENVIRONMENT', help='environment pin to add')
     set_parser.add_argument('PROJECT', nargs='+', type=project_version, help='project to pin: project@x.x.x-x (You can use * as patch to get the latest patch. Can\'t be used with a pre release)')
 
-    list_parser = subparsers.add_parser('show', help='show pins')
-    list_parser.set_defaults(func=lambda e: commands.show_pins(e.ENVIRONMENT))
-    list_parser.add_argument('ENVIRONMENT', nargs='*', help='Environment to list pins from')
+    list_parser = subparsers.add_parser('env', help='show environment pins', aliases=['e', 'show'])
+    list_parser.set_defaults(func=lambda e: commands.show_pins(e.ENVIRONMENT, e.old))
+    list_parser.add_argument('--old', action='store_true',
+                                 help='show old environments')
+    list_parser.add_argument('ENVIRONMENT', nargs='*', help='environment to list pins from (default all)')
 
-    versions_parser = subparsers.add_parser('versions', help='list available versions', aliases=['list-versions'])
-    versions_parser.set_defaults(func=lambda p: commands.list_versions(p.PROJECT or None, p.latest))
-    versions_parser.add_argument('PROJECT', nargs='*')
+    versions_parser = subparsers.add_parser('versions', help='list available versions', aliases=['v'])
+    versions_parser.set_defaults(func=lambda p: commands.list_versions(p.PROJECT or None, p.latest, p.old))
     versions_parser.add_argument('-l', '--latest', action='store_true',
                                  help='show only the latest open and closed versions')
+    versions_parser.add_argument('--old', action='store_true',
+                                 help='show old pins')
+    versions_parser.add_argument('PROJECT', nargs='*', help='projects to list (default all)')
 
     # show help without arguments
     if not sys.argv[1:]:
