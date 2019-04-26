@@ -1,6 +1,6 @@
 #!/bin/bash
 
-KPIN_VERSION='1.2.0'
+KPIN_VERSION='1.3.0'
 
 if ! docker image inspect "kronostechnologies/kpin:${KPIN_VERSION}" &> /dev/null; then
   docker pull "kronostechnologies/kpin:${KPIN_VERSION}"
