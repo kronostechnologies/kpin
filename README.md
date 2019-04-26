@@ -68,32 +68,33 @@ project_matching_rule: '(?P<project>[a-z_\-]+?)(-backend)?'
 
 ```
 $ kpin -h
-usage: kpin [-h] {set,show,versions,list-versions} ...
+usage: kpin [-h] {set,s,env,e,show,versions,v} ...
 
 optional arguments:
   -h, --help            show this help message and exit
 
 Commands:
-  {set,show,versions,list-versions}
-    set                 set pins
-    show                show pins
-    versions (list-versions)
-                        list available versions
+  {set,s,env,e,show,versions,v}
+    set (s)             set pins
+    env (e, show)       show environment pins
+    versions (v)        list available versions
 ```
 
 
 ### Set pins for one or many projects in an environment
 ```
-$ kpin set -h
-usage: kpin set [-h] ENVIRONMENT PROJECT [PROJECT ...]
+$ kpin s -h
+usage: kpin set [-h] [--create-environment] ENVIRONMENT PROJECT [PROJECT ...]
 
 positional arguments:
-  ENVIRONMENT  environment pin to add
-  PROJECT      project to pin: project@x.x.x-x
-               You can use * as patch to get the latest patch. Can't be used with a pre release
+  ENVIRONMENT           environment pin to add
+  PROJECT               project to pin: project@x.x.x-x (You can use * as
+                        patch to get the latest patch. Can't be used with a
+                        pre release)
 
 optional arguments:
-  -h, --help   show this help message and exit
+  -h, --help            show this help message and exit
+  --create-environment  allows creation of an environment
 ```
 
 Example:
@@ -103,20 +104,20 @@ $ kpin set my-prod a-project@1.0.0 another-project@2.0.3 another-other-project@2
 
 ### Show pins for one or many environments
 ```
-$ kpin show -h
-usage: kpin show [-h] [ENVIRONMENT [ENVIRONMENT ...]]
+$ kpin e -h
+usage: kpin env [-h] [--old] [ENVIRONMENT [ENVIRONMENT ...]]
 
 positional arguments:
-  ENVIRONMENT  environment to list pins from
+  ENVIRONMENT  environment to list pins from (default all)
 
 optional arguments:
   -h, --help   show this help message and exit
-
+  --old        show old environments
 ```
 
 Example:
 ```
-$ kpin show my-prod
+$ kpin env my-prod
 my-prod:
   a-project (1.0.0)
   another-project (2.0.3)
@@ -124,15 +125,16 @@ my-prod:
 
 ### Show versions for one or many projects
 ```
-$ kpin versions -h
-usage: kpin versions [-h] [-l] [PROJECT [PROJECT ...]]
+$ kpin v -h
+usage: kpin versions [-h] [-l] [--old] [PROJECT [PROJECT ...]]
 
 positional arguments:
-  PROJECT
+  PROJECT       projects to list (default all)
 
 optional arguments:
   -h, --help    show this help message and exit
   -l, --latest  show only the latest open and closed versions
+  --old         show old pins
 ```
 
 Example:
