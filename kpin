@@ -285,7 +285,7 @@ class Commands:
                                     (int(version_parts['minor']) + 1)) + '.0'):
                                 matched_versions.append(image_version)
 
-                    version_to_pin = None
+                    version_to_pin = '0.0.0'
                     for matched_version in matched_versions:
                         version_to_pin = semver.max_ver(version_to_pin, matched_version)
                 else:
