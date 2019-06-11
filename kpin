@@ -280,9 +280,9 @@ class Commands:
                     matched_versions = []
                     for image_version, image in versions.items():
                         if semver.match(image_version,
-                                        '>' + str(version_parts['major']) + '.' + str(version_parts['minor']) + '.0'):
+                                        '>=' + str(version_parts['major']) + '.' + str(version_parts['minor']) + '.0'):
                             if semver.match(image_version, '<' + str(version_parts['major']) + '.' + str(
-                                    (int(version_parts['minor']) + 1)) + '.0'):
+                                    (int(version_parts['minor']) + 1)) + '.0-0'):
                                 matched_versions.append(image_version)
 
                     version_to_pin = '0.0.0'
