@@ -24,7 +24,7 @@ _VERSION_REGEX = re.compile(
         \.
         (?P<patch>(?:0|[1-9][0-9]*|\*))
         (\-(?P<prerelease>
-            (?:0|[1-9][0-9]*)
+            (?:.*)
         ))?
         $
         """, re.VERBOSE)
