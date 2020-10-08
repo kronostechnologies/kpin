@@ -1,6 +1,6 @@
 #!/bin/bash
 
-KPIN_VERSION='1.3.4'
+KPIN_VERSION='1.4.0'
 
 if ! docker image inspect "ghcr.io/kronostechnologies/kpin:${KPIN_VERSION}" &> /dev/null; then
   docker pull "ghcr.io/kronostechnologies/kpin:${KPIN_VERSION}"
