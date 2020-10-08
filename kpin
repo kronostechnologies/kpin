@@ -219,9 +219,11 @@ class Commands:
             images_by_version = repository_group.main_repository.get_images_by_property('versions')
             items_to_print = dict()
 
+            filtered_images = dict((k, v) for (k, v) in images_by_version.items() if semver.VersionInfo.isvalid(k))
+
             if latest:
                 if images_by_version:
-                    sorted_items = sorted(images_by_version.items(), key=lambda k: comparator(k[0]), reverse=True)
+                    sorted_items = sorted(filtered_images.items(), key=lambda k: comparator(k[0]), reverse=True)
                     pattern_closed = re.compile(".+\\.[0-9]+$")
                     pattern_opened = re.compile(".+-[0-9]+$")
 
@@ -235,7 +237,7 @@ class Commands:
                             items_to_print[key] = image
                             break
             else:
-                items_to_print = images_by_version
+                items_to_print = filtered_images
 
             self.output.print_list(name, items_to_print.items(), formatter, comparator)
 
