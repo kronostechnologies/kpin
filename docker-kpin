@@ -1,6 +1,6 @@
 #!/bin/bash
 
-KPIN_VERSION='1.4.0'
+KPIN_VERSION='1.5.0'
 
 if ! docker image inspect "ghcr.io/kronostechnologies/kpin:${KPIN_VERSION}" &> /dev/null; then
   docker pull "ghcr.io/kronostechnologies/kpin:${KPIN_VERSION}"
@@ -20,8 +20,10 @@ if [[ -t 1 ]]; then
   FLAGS+=( --tty )
 fi
 
-if [[ -n "${AWS_PROFILE}" ]]; then
-  FLAGS+=( -e AWS_PROFILE="${AWS_PROFILE}" )
-fi
+for V in $(env | grep "^AWS_" | awk -F= '{print $1}'); do
+  if [[ -n "${!V}" ]]; then
+    FLAGS+=( -e ${V}="${!V}" )
+  fi
+done
 
 docker run "${FLAGS[@]}" "ghcr.io/kronostechnologies/kpin:${KPIN_VERSION}" "$@"

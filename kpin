@@ -345,7 +345,7 @@ def main():
 
     if config_path.exists():
         with open(str(config_path), 'r') as stream:
-            config = yaml.load(stream)
+            config = yaml.safe_load(stream)
             aws_profile = config.get('aws_profile', None)
             if aws_profile:
                 boto3.setup_default_session(profile_name=aws_profile)
