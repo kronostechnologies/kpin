@@ -2,32 +2,40 @@
 
 import argparse
 import functools
+import pathlib
 import re
 import sys
-import yaml
-import pathlib
-from typing import Dict, List, Tuple, Callable, ItemsView
-
-from termcolor import cprint
+import time
+from typing import Dict, List, Tuple, Callable, ItemsView, TYPE_CHECKING
 
 import boto3
 import semver
+import yaml
+from termcolor import cprint
+
+if TYPE_CHECKING:
+    from mypy_boto3_ecr.client import ECRClient
+    from mypy_boto3_sts.client import STSClient
+else:
+    ECRClient = object
+    STSClient = object
 
 ProjectVersionArg = Tuple[str, str]
 
 _VERSION_REGEX = re.compile(
-        r"""
-        ^
-        (?P<major>(?:0|[1-9][0-9]*))
-        \.
-        (?P<minor>(?:0|[1-9][0-9]*))
-        \.
-        (?P<patch>(?:0|[1-9][0-9]*|\*))
-        (\-(?P<prerelease>
-            (?:.*)
-        ))?
-        $
-        """, re.VERBOSE)
+    r"""
+    ^
+    (?P<major>(?:0|[1-9][0-9]*))
+    \.
+    (?P<minor>(?:0|[1-9][0-9]*))
+    \.
+    (?P<patch>(?:0|[1-9][0-9]*|\*))
+    (-(?P<prerelease>
+        (?:.*)
+    ))?
+    $
+    """, re.VERBOSE)
+
 
 class Image:
     __pin_prefix = 'pin-'
@@ -35,9 +43,8 @@ class Image:
     __version_prefix = 'version-'
     __version_regex = re.compile("^" + __version_prefix)
 
-    def __init__(self, client, payload: Dict):
+    def __init__(self, client: ECRClient, payload: Dict):
         self.__client = client
-        """ :type: pyboto3.ecr """
 
         self.name = payload['repositoryName']
         self.digest = payload['imageDigest']
@@ -73,9 +80,8 @@ class Image:
 
 
 class Repository:
-    def __init__(self, client, payload: Dict):
+    def __init__(self, client: ECRClient, payload: Dict):
         self.__client = client
-        """ :type: pyboto3.ecr """
 
         self.name = payload['repositoryName']
 
@@ -116,9 +122,8 @@ class RepositoryGroup:
 
 
 class Registry:
-    def __init__(self, client, **kwargs):
+    def __init__(self, client: ECRClient, **kwargs):
         self.__client = client
-        """ :type: pyboto3.ecr """
 
         self.__group_match = kwargs.get('project_matching_rule', None)
         """ :type: Pattern """
@@ -296,7 +301,10 @@ class Commands:
                 try:
                     current_version = pins.get(environment)
                     if current_version is None and not create:
-                        raise ValueError('{} skipped: {} is not a valid environment. Use --create-environment option to override.'.format(repository.name, environment))
+                        raise ValueError(
+                            '{} skipped: {} is not a valid environment. Use --create-environment option to override.'
+                            .format(repository.name, environment)
+                        )
                 except ValueError as e:
                     self.output.print_error(e)
                     continue
@@ -330,7 +338,7 @@ class Commands:
 
 def project_version(arg: str) -> ProjectVersionArg:
     project, version = arg.split('@')
-    if not re.compile('^[A-Za-z0-9_.\-]+$').fullmatch(project):
+    if not re.compile('^[A-Za-z0-9_.-]+$').fullmatch(project):
         raise ValueError("{} is not a valid project name".format(project))
 
     return project, version
@@ -346,14 +354,35 @@ def main():
     if config_path.exists():
         with open(str(config_path), 'r') as stream:
             config = yaml.safe_load(stream)
+            aws_creds = {}
+
             aws_profile = config.get('aws_profile', None)
-            if aws_profile:
-                boto3.setup_default_session(profile_name=aws_profile)
+            aws_region = config.get('aws_region', None)
+
+            aws_role_arn = config.get('aws_role_arn', None)
+            if aws_role_arn:
+                sts: STSClient = boto3.client('sts')
+                sts_role = sts.assume_role(
+                    RoleArn=aws_role_arn,
+                    RoleSessionName='kpin-session-%s' % (int(time.time())),
+                    DurationSeconds=900
+                )
+                aws_creds = sts_role.get('Credentials', {})
+
+            boto3.setup_default_session(
+                profile_name=aws_profile,
+                region_name=aws_region,
+                aws_access_key_id=aws_creds.get('AccessKeyId', None),
+                aws_session_token=aws_creds.get('SessionToken', None),
+                aws_secret_access_key=aws_creds.get('SecretAccessKey', None),
+            )
+
             project_matching_rule = config.get('project_matching_rule', None)
             if project_matching_rule:
                 registry_config['project_matching_rule'] = re.compile(project_matching_rule)
 
-    registry = Registry(boto3.client('ecr'), **registry_config)
+    ecr_client: ECRClient = boto3.client('ecr')
+    registry = Registry(ecr_client, **registry_config)
     commands = Commands(registry, output)
 
     parser = argparse.ArgumentParser()
@@ -362,23 +391,23 @@ def main():
 
     set_parser = subparsers.add_parser('set', help='set pins', aliases=['s'])
     set_parser.set_defaults(func=lambda e: commands.set_pins(e.ENVIRONMENT, e.PROJECT, e.create_environment))
-    set_parser.add_argument('--create-environment', action='store_true',
-                                 help='allows creation of an environment')
+    set_parser.add_argument('--create-environment', action='store_true', help='allows creation of an environment')
     set_parser.add_argument('ENVIRONMENT', help='environment pin to add')
-    set_parser.add_argument('PROJECT', nargs='+', type=project_version, help='project to pin: project@x.x.x-x (You can use * as patch to get the latest patch. Can\'t be used with a pre release)')
+    set_parser.add_argument(
+        'PROJECT', nargs='+', type=project_version,
+        help='project to pin: project@x.x.x-x (You can use * as patch to get the latest patch. Can\'t be used with a '
+             'pre release)')
 
     list_parser = subparsers.add_parser('env', help='show environment pins', aliases=['e', 'show'])
     list_parser.set_defaults(func=lambda e: commands.show_pins(e.ENVIRONMENT, e.old))
-    list_parser.add_argument('--old', action='store_true',
-                                 help='show old environments')
+    list_parser.add_argument('--old', action='store_true', help='show old environments')
     list_parser.add_argument('ENVIRONMENT', nargs='*', help='environment to list pins from (default all)')
 
     versions_parser = subparsers.add_parser('versions', help='list available versions', aliases=['v'])
     versions_parser.set_defaults(func=lambda p: commands.list_versions(p.PROJECT or None, p.latest, p.old))
     versions_parser.add_argument('-l', '--latest', action='store_true',
                                  help='show only the latest open and closed versions')
-    versions_parser.add_argument('--old', action='store_true',
-                                 help='show old pins')
+    versions_parser.add_argument('--old', action='store_true', help='show old pins')
     versions_parser.add_argument('PROJECT', nargs='*', help='projects to list (default all)')
 
     # show help without arguments

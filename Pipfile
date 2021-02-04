@@ -10,6 +10,7 @@ boto3 = "==1.17.1"
 semver = "2.13.0"
 
 [dev-packages]
+boto3-stubs = {extras = ["ecr", "sts"], version = "*"}
 
 [requires]
 python_version = "3.9"

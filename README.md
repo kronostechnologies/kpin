@@ -5,22 +5,20 @@ ECR image pinning tool
 
 ### Download
 
-Linux:
-```
+Debian:
+```shell
 git clone git@github.com:kronostechnologies/kpin
-sudo apt-get install python3-pip python3
-pip3 install -r requirements.txt
+pipenv run ./kpin
 ```
 
 Mac:
-```
+```shell
 git clone git@github.com:kronostechnologies/kpin
-brew install python
-pip3 install -r requirements.txt
+pipenv run ./kpin
 ```
 
 Docker:
-```
+```shell
 wget https://raw.githubusercontent.com/kronostechnologies/kpin/master/docker-kpin -O ~/bin/kpin
 chmod +x ~/bin/kpin
 ```
@@ -37,6 +35,7 @@ Config file example (~/.aws/config):
 region = us-east-1
 role_arn = arn:aws:iam::123456789012:role/ecr
 source_profile = default
+# credential_source = Environment
 ``` 
 
 Credentials file example (~/.aws/credentials):
@@ -52,6 +51,12 @@ Configuration file example (~/.config/kpin.yaml):
 ```
 # Optional profile name, this overrides AWS_PROFILE environment variable.
 aws_profile: ecr
+
+# Optional role name to assume
+aws_role_arn: arn:aws:iam:12346789012:role/ecr
+
+# Optional region name, this overrides AWS_DEFAULT_REGION
+aws_region: us-east-1
 
 # Optional project matching rule. Useful when you have multiple images for the same project.
 #
