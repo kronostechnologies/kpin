@@ -276,7 +276,7 @@ class Commands:
             images_by_pin = repository_group.main_repository.get_images_by_property('pins')
 
             for pin, image in images_by_pin.items():
-                if (not environment_names and (old or not pin.endswith('-old'))) or pin in environment_names:
+                if (not environment_names and (old or not pin.endswith('-old')) and not re.match(r".*-[0-9]+$", pin)) or pin in environment_names:
                     environments.setdefault(pin, dict())[image.name] = image
 
         def formatter(k, img):
