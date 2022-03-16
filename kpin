@@ -90,8 +90,16 @@ class Repository:
     def get_images(self) -> List[Image]:
         if self.__images is None:
             response = self.__client.describe_images(repositoryName=self.name, filter={'tagStatus': 'TAGGED'})
+            self.__images = []
 
-            self.__images = [Image(self.__client, i) for i in response['imageDetails']]
+            while True:
+                for i in response.get('imageDetails', None):
+                    self.__images.append(Image(self.__client, i))
+                next_token = response.get('nextToken', None)
+                if next_token:
+                    response = self.__client.describe_images(repositoryName=self.name, filter={'tagStatus': 'TAGGED'}, nextToken=next_token)
+                else:
+                    break
 
         return self.__images
 
@@ -135,7 +143,21 @@ class Registry:
             args['repositoryNames'] = names
 
         response = self.__client.describe_repositories(**args)
-        return {x.name: x for x in [Repository(self.__client, r) for r in response['repositories']]}
+
+        repositories = {}
+
+        while True:
+            for r in response['repositories']:
+                repository = Repository(self.__client, r)
+                repositories[repository.name] = repository
+            next_token = response.get('nextToken', None)
+            if next_token:
+                args['nextToken'] = next_token
+                response = self.__client.describe_repositories(**args)
+            else:
+                break
+
+        return repositories
 
     def get_repository_groups(self, names: List[str] = None) -> Dict[str, RepositoryGroup]:
         groups = {}
