@@ -1,3 +1,5 @@
+**This tool is not used anymore.**
+
 # kpin
 ECR image pinning tool
 
